@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Peon Picker — StarCraft + Warcraft</title>
+<style>
+  :root {
+    --bg: #0a0e0c;
+    --bg-soft: #11161a;
+    --bg-row: #161c20;
+    --bg-row-hover: #1d2429;
+    --fg: #d8e0d0;
+    --fg-dim: #889080;
+    --fg-muted: #4a5048;
+    --accent: #5fc46a;
+    --accent-soft: #2a4a32;
+    --warn: #d97a4a;
+    --warn-soft: #3a2418;
+    --border: #232a26;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  a { color: var(--accent); }
+
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg-soft); border-bottom: 1px solid var(--border);
+    padding: 14px 22px;
+  }
+  .title-row { display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap; }
+  h1 { font-size: 16px; margin: 0; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+  .stats { color: var(--fg-dim); font-size: 12px; }
+  .stats b { color: var(--fg); font-weight: 600; }
+  .stats .kept { color: var(--accent); }
+  .stats .dropped { color: var(--warn); }
+
+  .filters { margin-top: 10px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+  .filter-group { display: flex; gap: 4px; align-items: center; }
+  .filter-group label { color: var(--fg-dim); margin-right: 6px; text-transform: uppercase; letter-spacing: 0.05em; font-size: 11px; }
+  button {
+    background: transparent; color: var(--fg-dim); border: 1px solid var(--border);
+    padding: 4px 10px; cursor: pointer; font: inherit;
+    border-radius: 3px; transition: all 0.08s;
+  }
+  button:hover { color: var(--fg); border-color: var(--fg-muted); }
+  button.active { background: var(--accent-soft); color: var(--fg); border-color: var(--accent); }
+  button.warn { color: var(--warn); }
+  button.warn:hover { background: var(--warn-soft); border-color: var(--warn); }
+  button.primary { background: var(--accent-soft); color: var(--fg); border-color: var(--accent); }
+  button.primary:hover { background: var(--accent); color: var(--bg); }
+
+  input[type="search"] {
+    background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+    padding: 4px 10px; font: inherit; border-radius: 3px; min-width: 220px;
+  }
+  input[type="search"]:focus { outline: none; border-color: var(--accent); }
+
+  main { padding: 8px 22px 80px; max-width: 1100px; margin: 0 auto; }
+
+  .cat-section { margin-top: 28px; }
+  .cat-section h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--fg-dim); margin: 0 0 6px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .cat-section h2 .count { color: var(--fg-muted); font-weight: 400; }
+  .cat-event { color: var(--accent); font-size: 11px; font-weight: 400;
+    padding: 2px 6px; border: 1px solid var(--accent-soft); border-radius: 2px;
+    margin-left: auto; text-transform: none; letter-spacing: 0; }
+
+  .pack-section { margin: 14px 0 18px; }
+  .pack-header {
+    display: flex; align-items: center; gap: 10px; padding: 4px 0;
+    color: var(--fg-dim); font-size: 12px;
+  }
+  .pack-header .group { color: var(--fg-muted); }
+  .pack-header .pack-name { color: var(--fg); }
+  .pack-header .pack-count { color: var(--fg-muted); }
+  .pack-header .pack-actions { margin-left: auto; display: flex; gap: 4px; }
+  .pack-header .pack-actions button { font-size: 11px; padding: 2px 8px; }
+
+  .row {
+    display: grid; grid-template-columns: 36px 1fr auto auto; gap: 12px; align-items: center;
+    padding: 6px 10px; border-radius: 3px; background: var(--bg-row);
+    margin-bottom: 2px; transition: background 0.08s;
+  }
+  .row:hover { background: var(--bg-row-hover); }
+  .row.dropped { opacity: 0.45; }
+  .row.dropped .label-text { text-decoration: line-through; }
+  .row.focused { outline: 1px solid var(--accent); }
+
+  .play-btn {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; color: var(--fg);
+  }
+  .play-btn.playing { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+
+  .label { color: var(--fg); font-size: 13px; }
+  .label .file { color: var(--fg-muted); font-size: 11px; margin-left: 8px; }
+
+  .badge {
+    font-size: 10px; padding: 2px 6px; border-radius: 2px;
+    background: var(--accent-soft); color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .badge.dropped { background: var(--warn-soft); color: var(--warn); }
+
+  .decision { display: flex; gap: 4px; }
+  .decision button { font-size: 11px; padding: 3px 10px; min-width: 48px; }
+
+  footer {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--bg-soft); border-top: 1px solid var(--border);
+    padding: 10px 22px;
+    display: flex; gap: 10px; align-items: center; justify-content: flex-end;
+  }
+  footer .helper { margin-right: auto; font-size: 11px; color: var(--fg-muted); }
+  kbd { font: inherit; background: var(--bg-row); border: 1px solid var(--border);
+    padding: 1px 6px; border-radius: 2px; color: var(--fg-dim); font-size: 11px; }
+
+  .empty { color: var(--fg-muted); padding: 40px; text-align: center; }
+
+  dialog {
+    background: var(--bg-soft); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 4px; padding: 0; max-width: 700px; width: 90%;
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.7); }
+  dialog .dlg-head { padding: 12px 18px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; }
+  dialog .dlg-head h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+  dialog .dlg-head .close { margin-left: auto; }
+  dialog pre { margin: 0; padding: 18px; max-height: 50vh; overflow: auto;
+    font-size: 12px; color: var(--fg); background: var(--bg); white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-row">
+    <h1>Peon Picker</h1>
+    <div class="stats" id="stats"></div>
+  </div>
+  <div class="filters">
+    <div class="filter-group" id="group-filter">
+      <label>Group</label>
+    </div>
+    <div class="filter-group" id="cat-filter">
+      <label>Event</label>
+    </div>
+    <div class="filter-group">
+      <label>Search</label>
+      <input type="search" id="search" placeholder="goliath, work work, …">
+    </div>
+    <div class="filter-group" style="margin-left:auto">
+      <button id="show-dropped">Hide dropped</button>
+      <button id="reset-all" class="warn">Reset all</button>
+    </div>
+  </div>
+</header>
+
+<main id="main"></main>
+
+<footer>
+  <span class="helper">
+    <kbd>Space</kbd> play · <kbd>X</kbd> drop · <kbd>Z</kbd> keep · <kbd>↑</kbd>/<kbd>↓</kbd> nav · <kbd>A</kbd> autoplay next
+  </span>
+  <button id="autoplay-toggle">Autoplay: off</button>
+  <button id="export-btn" class="primary">Export decisions</button>
+</footer>
+
+<dialog id="export-dlg">
+  <div class="dlg-head">
+    <h3>Export</h3>
+    <button data-tab="shell" class="tab-btn active">Shell script</button>
+    <button data-tab="json" class="tab-btn">JSON</button>
+    <button class="close" id="dlg-close">Close</button>
+  </div>
+  <pre id="dlg-body"></pre>
+</dialog>
+
+<script>
+"use strict";
+
+const STORAGE_KEY = "peon-picker-decisions-v1";
+let manifest = null;
+let decisions = {};
+let filters = { group: "all", category: "all", q: "" };
+let hideDropped = false;
+let autoplay = false;
+let focusedId = null;
+let currentAudio = null;
+
+const CAT_TO_EVENT = {
+  "session.start": "SessionStart",
+  "task.acknowledge": "UserPromptSubmit",
+  "task.complete": "Stop",
+  "task.error": "PostToolUseFailure",
+  "input.required": "Notification",
+  "resource.limit": "PreCompact",
+  "user.spam": "(spam guard)",
+};
+
+function el(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") node.className = v;
+    else if (k === "dataset") Object.assign(node.dataset, v);
+    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    else if (k === "text") node.textContent = v;
+    else if (k === "attrs") for (const [a, av] of Object.entries(v)) node.setAttribute(a, av);
+    else node[k] = v;
+  }
+  for (const c of children) {
+    if (c == null) continue;
+    if (typeof c === "string") node.appendChild(document.createTextNode(c));
+    else node.appendChild(c);
+  }
+  return node;
+}
+
+async function load() {
+  const r = await fetch("manifest.json");
+  manifest = await r.json();
+  try { decisions = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); }
+  catch { decisions = {}; }
+  buildFilters();
+  render();
+  bindKeys();
+  document.getElementById("search").addEventListener("input", e => {
+    filters.q = e.target.value.trim().toLowerCase(); render();
+  });
+  document.getElementById("show-dropped").addEventListener("click", e => {
+    hideDropped = !hideDropped;
+    e.target.classList.toggle("active", hideDropped);
+    e.target.textContent = hideDropped ? "Show dropped" : "Hide dropped";
+    render();
+  });
+  document.getElementById("reset-all").addEventListener("click", () => {
+    if (!confirm("Reset every decision? (You'll lose your picks.)")) return;
+    decisions = {}; persist(); render();
+  });
+  document.getElementById("autoplay-toggle").addEventListener("click", e => {
+    autoplay = !autoplay;
+    e.target.classList.toggle("active", autoplay);
+    e.target.textContent = "Autoplay: " + (autoplay ? "on" : "off");
+  });
+  document.getElementById("export-btn").addEventListener("click", openExport);
+  document.getElementById("dlg-close").addEventListener("click", () => {
+    document.getElementById("export-dlg").close();
+  });
+  document.querySelectorAll(".tab-btn").forEach(b => {
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".tab-btn").forEach(x => x.classList.toggle("active", x === b));
+      renderExport(b.dataset.tab);
+    });
+  });
+}
+
+function buildFilters() {
+  const g = document.getElementById("group-filter");
+  const groups = ["all", ...manifest.group_order.filter(x => manifest.packs.some(p => p.group === x))];
+  groups.forEach(grp => {
+    const b = el("button", {
+      text: grp === "all" ? "All" : grp,
+      dataset: { group: grp },
+      class: grp === "all" ? "active" : "",
+      onclick: () => {
+        filters.group = grp;
+        g.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+        render();
+      },
+    });
+    g.appendChild(b);
+  });
+
+  const c = document.getElementById("cat-filter");
+  const cats = ["all", ...manifest.category_order];
+  cats.forEach(cat => {
+    const label = cat === "all" ? "All" : (manifest.category_labels[cat] || cat);
+    const b = el("button", {
+      text: label,
+      dataset: { cat },
+      class: cat === "all" ? "active" : "",
+      onclick: () => {
+        filters.category = cat;
+        c.querySelectorAll("button").forEach(x => x.classList.toggle("active", x === b));
+        render();
+      },
+    });
+    c.appendChild(b);
+  });
+}
+
+function visibleSounds() {
+  return manifest.sounds.filter(s => {
+    if (filters.group !== "all" && s.group !== filters.group) return false;
+    if (filters.category !== "all" && s.category !== filters.category) return false;
+    if (hideDropped && (decisions[s.id] === "dropped")) return false;
+    if (filters.q) {
+      const hay = `${s.label} ${s.pack_display} ${s.file}`.toLowerCase();
+      if (!hay.includes(filters.q)) return false;
+    }
+    return true;
+  });
+}
+
+function counts() {
+  let kept = 0, dropped = 0;
+  for (const s of manifest.sounds) {
+    if (decisions[s.id] === "dropped") dropped++; else kept++;
+  }
+  return { kept, dropped, total: manifest.sounds.length };
+}
+
+function renderStats() {
+  const c = counts();
+  const stats = document.getElementById("stats");
+  stats.replaceChildren(
+    el("b", { text: String(c.total) }), " sounds across ",
+    el("b", { text: String(manifest.totals.packs) }), " packs · ",
+    el("span", { class: "kept", text: `${c.kept} kept` }), " · ",
+    el("span", { class: "dropped", text: `${c.dropped} dropped` }),
+  );
+}
+
+function render() {
+  renderStats();
+  const main = document.getElementById("main");
+  const sounds = visibleSounds();
+  main.replaceChildren();
+
+  if (!sounds.length) {
+    main.appendChild(el("div", { class: "empty", text: "No sounds match the current filters." }));
+    return;
+  }
+
+  const byCat = new Map();
+  for (const s of sounds) {
+    if (!byCat.has(s.category)) byCat.set(s.category, new Map());
+    const byPack = byCat.get(s.category);
+    if (!byPack.has(s.pack)) byPack.set(s.pack, []);
+    byPack.get(s.pack).push(s);
+  }
+
+  for (const cat of manifest.category_order) {
+    if (!byCat.has(cat)) continue;
+    const byPack = byCat.get(cat);
+    const totalInCat = [...byPack.values()].reduce((n, arr) => n + arr.length, 0);
+    const sec = el("section", { class: "cat-section" },
+      el("h2", {},
+        manifest.category_labels[cat] || cat,
+        " ", el("span", { class: "count", text: String(totalInCat) }),
+        el("span", { class: "cat-event", text: `→ ${CAT_TO_EVENT[cat] || cat}` }),
+      ),
+    );
+
+    const packsSorted = [...byPack.keys()].sort((a, b) => {
+      const pa = manifest.packs.find(p => p.name === a);
+      const pb = manifest.packs.find(p => p.name === b);
+      const gi = manifest.group_order.indexOf(pa.group) - manifest.group_order.indexOf(pb.group);
+      return gi !== 0 ? gi : pa.display.localeCompare(pb.display);
+    });
+
+    for (const packName of packsSorted) {
+      const sList = byPack.get(packName);
+      const pack = manifest.packs.find(p => p.name === packName);
+
+      const ps = el("div", { class: "pack-section" });
+      const head = el("div", { class: "pack-header" },
+        el("span", { class: "group", text: pack.group }),
+        el("span", { text: "/" }),
+        el("span", { class: "pack-name", text: pack.display }),
+        el("span", { class: "pack-count", text: `(${sList.length})` }),
+        el("div", { class: "pack-actions" },
+          el("button", { text: "Drop pack here", onclick: () => bulk(sList, "dropped") }),
+          el("button", { text: "Keep pack here", onclick: () => bulk(sList, "kept") }),
+        ),
+      );
+      ps.appendChild(head);
+
+      for (const s of sList) {
+        const isDropped = decisions[s.id] === "dropped";
+        const row = el("div", {
+          class: "row" + (isDropped ? " dropped" : "") + (focusedId === s.id ? " focused" : ""),
+          dataset: { id: s.id },
+          onclick: e => {
+            if (e.target.tagName === "BUTTON" || e.target.closest("button")) return;
+            focusedId = s.id; play(s); render();
+          },
+        },
+          el("button", { class: "play-btn", attrs: { title: "Play" },
+                        onclick: e => { e.stopPropagation(); play(s); } },
+            el("span", { text: "▶" }),
+          ),
+          el("div", { class: "label" },
+            el("span", { class: "label-text", text: `"${s.label}"` }),
+            el("span", { class: "file",
+              text: `${pack.display} · ${s.file.replace(/^sounds\//, "")}` }),
+          ),
+          el("span", { class: "badge" + (isDropped ? " dropped" : ""),
+                       text: decisions[s.id] || "kept" }),
+          el("div", { class: "decision" },
+            el("button", { text: "Keep", onclick: e => { e.stopPropagation(); decide(s.id, "kept"); } }),
+            el("button", { class: "warn", text: "Drop",
+                           onclick: e => { e.stopPropagation(); decide(s.id, "dropped"); } }),
+          ),
+        );
+        ps.appendChild(row);
+      }
+      sec.appendChild(ps);
+    }
+    main.appendChild(sec);
+  }
+}
+
+function bulk(sounds, decision) {
+  for (const s of sounds) decisions[s.id] = decision;
+  persist(); render();
+}
+
+function decide(id, decision) {
+  decisions[id] = decision;
+  persist(); render();
+}
+
+function persist() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(decisions));
+}
+
+function play(s) {
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  document.querySelectorAll(".play-btn.playing").forEach(b => b.classList.remove("playing"));
+  const a = new Audio(s.url);
+  currentAudio = a;
+  a.volume = 0.7;
+  const btn = document.querySelector(`.row[data-id="${cssEscape(s.id)}"] .play-btn`);
+  if (btn) btn.classList.add("playing");
+  a.addEventListener("ended", () => {
+    if (btn) btn.classList.remove("playing");
+    if (autoplay) playNext(s.id);
+  });
+  a.addEventListener("error", () => {
+    if (btn) btn.classList.remove("playing");
+    console.error("Failed to play", s.url);
+  });
+  a.play().catch(err => console.error(err));
+  focusedId = s.id;
+}
+
+function playNext(currentId) {
+  const visible = visibleSounds();
+  const idx = visible.findIndex(s => s.id === currentId);
+  if (idx >= 0 && idx < visible.length - 1) {
+    focusedId = visible[idx + 1].id;
+    play(visible[idx + 1]);
+    const r = document.querySelector(`.row[data-id="${cssEscape(focusedId)}"]`);
+    if (r) r.scrollIntoView({ block: "nearest" });
+    render();
+  }
+}
+
+function bindKeys() {
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+    const visible = visibleSounds();
+    if (!visible.length) return;
+    let idx = focusedId ? visible.findIndex(s => s.id === focusedId) : -1;
+    if (idx < 0) idx = 0;
+    const cur = visible[idx];
+    let scrollTo = null;
+    switch (e.key) {
+      case " ":
+        e.preventDefault(); play(cur); render();
+        scrollTo = cur.id;
+        break;
+      case "ArrowDown": case "j":
+        e.preventDefault();
+        focusedId = visible[Math.min(idx + 1, visible.length - 1)].id;
+        render(); scrollTo = focusedId;
+        break;
+      case "ArrowUp": case "k":
+        e.preventDefault();
+        focusedId = visible[Math.max(idx - 1, 0)].id;
+        render(); scrollTo = focusedId;
+        break;
+      case "x": case "X":
+        decide(cur.id, "dropped"); break;
+      case "z": case "Z":
+        decide(cur.id, "kept"); break;
+      case "a": case "A": {
+        autoplay = !autoplay;
+        const t = document.getElementById("autoplay-toggle");
+        t.classList.toggle("active", autoplay);
+        t.textContent = "Autoplay: " + (autoplay ? "on" : "off");
+        break;
+      }
+    }
+    if (scrollTo) {
+      const r = document.querySelector(`.row[data-id="${cssEscape(scrollTo)}"]`);
+      if (r) r.scrollIntoView({ block: "nearest" });
+    }
+  });
+}
+
+function openExport() {
+  document.querySelectorAll(".tab-btn").forEach(b => {
+    b.classList.toggle("active", b.dataset.tab === "shell");
+  });
+  renderExport("shell");
+  document.getElementById("export-dlg").showModal();
+}
+
+function renderExport(tab) {
+  const dropped = manifest.sounds.filter(s => decisions[s.id] === "dropped");
+  let body = "";
+  if (tab === "shell") {
+    body = "#!/bin/bash\n# Apply curated peon-picker decisions\n# Disables " + dropped.length + " sounds.\nset -e\n\n";
+    for (const s of dropped) {
+      const file = s.file.replace(/^sounds\//, "");
+      body += `peon sounds disable ${shq(s.category)} ${shq(file)} --pack=${shq(s.pack)}\n`;
+    }
+    if (!dropped.length) body += "# No sounds dropped — nothing to disable.\n";
+  } else {
+    body = JSON.stringify({
+      generated_at: new Date().toISOString(),
+      total_sounds: manifest.sounds.length,
+      kept: manifest.sounds.length - dropped.length,
+      dropped: dropped.map(s => ({ pack: s.pack, category: s.category, file: s.file, label: s.label })),
+    }, null, 2);
+  }
+  document.getElementById("dlg-body").textContent = body;
+}
+
+function shq(s) {
+  if (/^[A-Za-z0-9._\/-]+$/.test(s)) return s;
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}
+function cssEscape(s) { return CSS.escape ? CSS.escape(s) : s.replace(/[^\w-]/g, "\\$&"); }
+
+load();
+</script>
+</body>
+</html>

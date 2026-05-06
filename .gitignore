@@ -1,0 +1,11 @@
+# Generated locally per-machine; not part of the repo
+manifest.json
+
+# Symlink to ~/.openpeon/packs — only meaningful on the picker author's machine
+packs
+
+# OS / editor noise
+.DS_Store
+*.swp
+.idea/
+.vscode/
